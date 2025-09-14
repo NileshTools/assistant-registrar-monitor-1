@@ -19,11 +19,14 @@ with open("targets.json", "r") as f:
 
 # Track notified items
 SEEN_FILE = "seen_notices.json"
+FIRST_RUN = False  # Change to True for first run initialization
+
 if os.path.exists(SEEN_FILE):
     with open(SEEN_FILE, "r") as f:
         seen_notices = set(json.load(f))
 else:
     seen_notices = set()
+    FIRST_RUN = True  # No previous data, first run
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -52,11 +55,11 @@ def check_sites():
             continue
 
         soup = BeautifulSoup(r.text, "html.parser")
-        site_notices = set()
+        site_notices = []
 
         # === IIT ISM Dhanbad ===
         if "iitism.ac.in" in url:
-            table = soup.find("table")  # first table contains notices
+            table = soup.find("table")
             if table:
                 for row in table.find_all("tr"):
                     cols = row.find_all("td")
@@ -69,32 +72,36 @@ def check_sites():
                                 href = requests.compat.urljoin(url, href)
                         else:
                             href = url  # fallback
-                        notice_id = notice_text
-                        if notice_id not in seen_notices:
-                            send_message(f"📢 New notice at {name}:\n{notice_text}\n🔗 {href}")
-                            seen_notices.add(notice_id)
-                            updated = True
+                        site_notices.append((notice_text, href))
 
         # === Other sites: Assistant Registrar ===
         else:
             for a in soup.find_all("a", href=True):
                 text = a.get_text(strip=True)
                 if text and "assistant registrar" in text.lower():
-                    notice_id = text
                     href = a["href"]
                     if not href.startswith("http"):
                         href = requests.compat.urljoin(url, href)
-                    if notice_id not in seen_notices:
-                        send_message(f"🎯 New Assistant Registrar update at {name}:\n{text}\n🔗 {href}")
-                        seen_notices.add(notice_id)
-                        updated = True
+                    site_notices.append((text, href))
 
-    # Save updated seen notices
+        # === Process notices ===
+        for notice_text, href in site_notices:
+            notice_id = f"{name} | {notice_text}"  # unique identifier per org+notice
+            if notice_id not in seen_notices:
+                if not FIRST_RUN:
+                    send_message(f"📢 New notice at {name}:\n{notice_text}\n🔗 {href}")
+                seen_notices.add(notice_id)
+                updated = True
+
     if updated:
         with open(SEEN_FILE, "w") as f:
             json.dump(list(seen_notices), f)
 
 if __name__ == "__main__":
-    print("🔍 Checking sites...")
+    if FIRST_RUN:
+        print("⚡ First run detected: initializing seen notices without sending notifications...")
+    else:
+        print("🔍 Checking sites for new notices...")
+
     check_sites()
     print("✅ Done.")
