@@ -22,6 +22,14 @@ HEADERS = {
                   "(KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36"
 }
 
+# File to track already notified notices
+SEEN_FILE = "seen_notices.json"
+if os.path.exists(SEEN_FILE):
+    with open(SEEN_FILE, "r") as f:
+        seen_notices = json.load(f)
+else:
+    seen_notices = {}
+
 def send_message(message):
     try:
         bot.send_message(chat_id=CHAT_ID, text=message, disable_web_page_preview=True)
@@ -42,44 +50,49 @@ def check_sites():
 
         soup = BeautifulSoup(r.text, "html.parser")
 
-        # === Find the first notice ===
-        first_notice = None
+        # === Find all notices related to Assistant Registrar ===
+        new_notices = []
 
-        # Special handling for IIT ISM Dhanbad
+        # IIT ISM Dhanbad specific handling
         if "iitism.ac.in" in url:
             table = soup.find("table")
             if table:
-                row = table.find("tr")
-                if row:
+                rows = table.find_all("tr")
+                for row in rows:
                     cols = row.find_all("td")
                     if cols:
-                        notice_text = cols[0].get_text(strip=True)
-                        a_tag = cols[0].find("a", href=True)
-                        if a_tag:
-                            href = a_tag["href"]
-                            if not href.startswith("http"):
-                                href = requests.compat.urljoin(url, href)
-                        else:
-                            href = url
-                        first_notice = (notice_text, href)
+                        text = cols[0].get_text(strip=True)
+                        if "assistant registrar" in text.lower():
+                            a_tag = cols[0].find("a", href=True)
+                            link = a_tag["href"] if a_tag else url
+                            if not link.startswith("http"):
+                                link = requests.compat.urljoin(url, link)
+                            new_notices.append((text, link))
         else:
-            # Generic: first link containing notice/recruitment
+            # Generic handling: links containing "assistant registrar"
             for a in soup.find_all("a", href=True):
                 text = a.get_text(strip=True)
-                if text and ("recruitment" in text.lower() or "notice" in text.lower() or "assistant registrar" in text.lower()):
-                    href = a["href"]
-                    if not href.startswith("http"):
-                        href = requests.compat.urljoin(url, href)
-                    first_notice = (text, href)
-                    break  # only first notice
+                if "assistant registrar" in text.lower():
+                    link = a["href"]
+                    if not link.startswith("http"):
+                        link = requests.compat.urljoin(url, link)
+                    new_notices.append((text, link))
 
-        # Send notification
-        if first_notice:
-            notice_text, href = first_notice
-            send_message(f"📢 Latest notice at {name}:\n{notice_text}\n🔗 {href}")
-            print(f"Sent notification for {name}")
+        # Check for already seen notices
+        seen = seen_notices.get(name, [])
+        for text, link in new_notices:
+            if text not in seen:
+                send_message(f"📢 New Assistant Registrar notice at {name}:\n{text}\n🔗 {link}")
+                seen.append(text)
+
+        # Update seen notices
+        seen_notices[name] = seen
+
+    # Save seen notices
+    with open(SEEN_FILE, "w") as f:
+        json.dump(seen_notices, f, indent=2)
 
 if __name__ == "__main__":
-    print("🔍 Checking top notices for each organization...")
+    print("🔍 Checking Assistant Registrar notices...")
     check_sites()
     print("✅ Done.")
