@@ -54,22 +54,34 @@ def check_sites():
 
         soup = BeautifulSoup(r.text, "html.parser")
 
-        # Collect all links on the page
-        links = []
-        for a in soup.find_all("a", href=True):
-            text = a.get_text(strip=True)
-            href = a["href"]
+        # Special handling for IIT ISM Dhanbad - restrict to actual notices
+        if "iitism.ac.in" in url:
+            notices_div = soup.find("div", class_="table-responsive")  # This class contains actual notices
+            if notices_div:
+                links = []
+                for a in notices_div.find_all("a", href=True):
+                    text = a.get_text(strip=True)
+                    href = a["href"]
+                    if not href.startswith("http"):
+                        href = requests.compat.urljoin(url, href)
+                    links.append((text, href))
+            else:
+                links = []
+        else:
+            # Generic scraping for other sites
+            links = []
+            for a in soup.find_all("a", href=True):
+                text = a.get_text(strip=True)
+                href = a["href"]
+                if not href.startswith("http"):
+                    href = requests.compat.urljoin(url, href)
+                links.append((text, href))
 
-            # Make absolute URL
-            if not href.startswith("http"):
-                href = requests.compat.urljoin(url, href)
-
-            links.append((text, href))
-
+        # Check and send notifications
         for text, href in links:
             if href not in seen_links:
-                # Always notify for IIT ISM Dhanbad notices page
-                if "ism" in url or "iitism" in url:
+                # Always notify for IIT ISM Dhanbad
+                if "iitism.ac.in" in url:
                     send_message(f"📢 New notice at {name}:\n{text}\n{href}")
                     seen_links.add(href)
                     updated = True
