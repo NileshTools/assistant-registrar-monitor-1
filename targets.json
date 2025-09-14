@@ -1,7 +1,7 @@
 [
   {
     "name": "IIT (ISM) Dhanbad - Notices",
-    "url": "https://www.iitism.ac.in/all-active-notices"
+    "url": "https://www.iitism.ac.in/all-active-notices/"
   },
   {
     "name": "IIT Bombay - Recruitment",
@@ -14,5 +14,9 @@
   {
     "name": "IIIT Hyderabad - Careers",
     "url": "https://www.iiit.ac.in/careers/"
+  },
+  {
+    "name": "NIT Jamshedpur - Recruitment Notices",
+    "url": "https://www.nitjsr.ac.in/Recruitments/"
   }
 ]
