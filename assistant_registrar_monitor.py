@@ -8,17 +8,16 @@ import urllib3
 # Suppress SSL warnings
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# Load Telegram credentials from GitHub Secrets
+# Telegram credentials from GitHub Secrets
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-
 bot = telegram.Bot(token=TELEGRAM_TOKEN)
 
 # Load target websites
 with open("targets.json", "r") as f:
     TARGETS = json.load(f)
 
-# Track notified items to avoid duplicates
+# Track notified items
 SEEN_FILE = "seen_notices.json"
 if os.path.exists(SEEN_FILE):
     with open(SEEN_FILE, "r") as f:
@@ -33,7 +32,7 @@ HEADERS = {
 
 def send_message(message):
     try:
-        bot.send_message(chat_id=CHAT_ID, text=message)
+        bot.send_message(chat_id=CHAT_ID, text=message, disable_web_page_preview=True)
     except Exception as e:
         print("Error sending message:", e)
 
@@ -53,40 +52,42 @@ def check_sites():
             continue
 
         soup = BeautifulSoup(r.text, "html.parser")
-
-        # Generate unique notice identifiers per site
         site_notices = set()
 
-        # Special handling for IIT ISM Dhanbad: only first table
+        # === IIT ISM Dhanbad ===
         if "iitism.ac.in" in url:
-            table = soup.find("table")
+            table = soup.find("table")  # first table contains notices
             if table:
                 for row in table.find_all("tr"):
                     cols = row.find_all("td")
                     if cols:
                         notice_text = cols[0].get_text(strip=True)
-                        if notice_text:
-                            site_notices.add(notice_text)
+                        a_tag = cols[0].find("a", href=True)
+                        if a_tag:
+                            href = a_tag["href"]
+                            if not href.startswith("http"):
+                                href = requests.compat.urljoin(url, href)
+                        else:
+                            href = url  # fallback
+                        notice_id = notice_text
+                        if notice_id not in seen_notices:
+                            send_message(f"📢 New notice at {name}:\n{notice_text}\n🔗 {href}")
+                            seen_notices.add(notice_id)
+                            updated = True
+
+        # === Other sites: Assistant Registrar ===
         else:
-            # Generic scraping: all <a> text
             for a in soup.find_all("a", href=True):
                 text = a.get_text(strip=True)
-                if text:
-                    site_notices.add(text)
-
-        # Check for new notices
-        for notice_text in site_notices:
-            if notice_text not in seen_notices:
-                # Always notify for IIT ISM Dhanbad / general notices
-                if "iitism.ac.in" in url:
-                    send_message(f"📢 New notice/advertisement published at {name}")
-                    seen_notices.add(notice_text)
-                    updated = True
-                # Assistant Registrar detection
-                elif "assistant registrar" in notice_text.lower():
-                    send_message(f"🎯 New Assistant Registrar update at {name}")
-                    seen_notices.add(notice_text)
-                    updated = True
+                if text and "assistant registrar" in text.lower():
+                    notice_id = text
+                    href = a["href"]
+                    if not href.startswith("http"):
+                        href = requests.compat.urljoin(url, href)
+                    if notice_id not in seen_notices:
+                        send_message(f"🎯 New Assistant Registrar update at {name}:\n{text}\n🔗 {href}")
+                        seen_notices.add(notice_id)
+                        updated = True
 
     # Save updated seen notices
     if updated:
