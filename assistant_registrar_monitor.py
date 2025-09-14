@@ -3,8 +3,11 @@ from bs4 import BeautifulSoup
 import json
 import os
 import re
-import time
 import telegram
+import urllib3
+
+# Suppress SSL warnings
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # Load Telegram credentials from GitHub Secrets
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -24,6 +27,11 @@ if os.path.exists(SEEN_FILE):
 else:
     seen_links = set()
 
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                  "(KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36"
+}
+
 def send_message(message):
     try:
         bot.send_message(chat_id=CHAT_ID, text=message, disable_web_page_preview=True)
@@ -38,7 +46,7 @@ def check_sites():
         url = site["url"]
 
         try:
-            r = requests.get(url, timeout=20)
+            r = requests.get(url, timeout=20, headers=HEADERS, verify=False)
             r.raise_for_status()
         except Exception as e:
             print(f"❌ Failed to fetch {name}: {e}")
@@ -52,14 +60,13 @@ def check_sites():
             text = a.get_text(strip=True)
             href = a["href"]
 
-            # Absolute URL
+            # Make absolute URL
             if not href.startswith("http"):
                 href = requests.compat.urljoin(url, href)
 
             links.append((text, href))
 
         for text, href in links:
-            # If new link not seen before
             if href not in seen_links:
                 # Always notify for IIT ISM Dhanbad notices page
                 if "ism" in url or "iitism" in url:
